@@ -1,0 +1,11 @@
+# Checklist de regresión — v0.8.30
+- [x] PDF con texto habilitado.
+- [x] Word DOCX habilitado.
+- [x] XLS/XLSX, CSV y TXT conservados.
+- [x] Texto importado se convierte en criterios editables.
+- [x] Documento fuente queda identificado por nombre y fecha.
+- [x] PDF escaneado sin texto muestra advertencia.
+- [x] Word .doc antiguo solicita conversión a DOCX.
+- [x] Captura manual y generación de indicadores conservadas.
+- [x] Histórico anual, auditoría, Drive, cierre e informe final conservados.
+- [x] Corrección Sucursal de Participantes conservada.

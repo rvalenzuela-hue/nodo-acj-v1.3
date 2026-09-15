@@ -1,0 +1,13 @@
+# Checklist de regresión — v0.8.35
+- [x] Cada campo de Datos a solicitar muestra Editar y Quitar.
+- [x] Editar permite cambiar nombre/etiqueta.
+- [x] Editar permite cambiar tipo de dato.
+- [x] Campos Selección permiten editar opciones.
+- [x] Permite marcar/desmarcar Obligatorio.
+- [x] Guardar persiste la configuración.
+- [x] Cancelar descarta la edición.
+- [x] Campos fuera de edición quedan en solo lectura para evitar cambios accidentales.
+- [x] Captura individual, Excel, copiar/pegar y formulario público conservados.
+- [x] Acciones masivas de beneficiarios conservadas.
+- [x] Regla: sólo colaborador/trabajador puede portar ID de participante.
+- [x] Clonado, publicación, lineamientos, montos e histórico conservados.

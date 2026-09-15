@@ -1,0 +1,11 @@
+# Checklist de regresión v0.8.47
+- [x] Evaluación de Necesidades abre sin pantalla blanca.
+- [x] Se conservan los dos flujos: documento externo / nueva evaluación NODO.
+- [x] Registro externo no muestra constructor de preguntas.
+- [x] Selector de PDF muestra y confirma el archivo seleccionado.
+- [x] Validación PDF robusta: extensión, MIME o firma real `%PDF-`.
+- [x] El botón valida título y año antes de subir.
+- [x] Se conserva conexión Apps Script y destino `informes`.
+- [x] Se conserva evaluación vigente/rectora y trazabilidad del documento original.
+- [x] Archivos JS/JSX pasan transpilación estática sin errores.
+- [ ] Prueba real de escritura en Drive: requiere ejecutar desde el despliegue del usuario.

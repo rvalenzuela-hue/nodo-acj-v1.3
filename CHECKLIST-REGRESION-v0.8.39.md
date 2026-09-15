@@ -1,0 +1,12 @@
+# Checklist de regresión — v0.8.39
+- [x] Evaluación de Necesidades permite Registro individual.
+- [x] Permite descargar plantilla Excel.
+- [x] Permite importar evaluaciones desde Excel/CSV.
+- [x] Permite copiar/pegar bloques de filas y columnas.
+- [x] Registros importados se revisan antes de guardar.
+- [x] Histórico conserva Editar / Imprimir / Eliminar individual y masivo.
+- [x] Se conserva captura de encuestas individual, Excel, copiar/pegar y formulario público.
+- [x] Se conserva procesamiento, hallazgos, informe y publicación.
+- [x] Se conserva integración con Plan de Prima.
+- [x] Se conserva carpeta functions y sendExpenseEmail.
+- [x] Se conserva cambio de contraseña.

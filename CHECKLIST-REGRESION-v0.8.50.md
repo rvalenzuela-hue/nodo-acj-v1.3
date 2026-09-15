@@ -1,0 +1,22 @@
+# Checklist de regresión · NODO v0.8.50 · Actas híbridas
+
+- [x] Se parte de NODO v0.8.49 Mesa de Trabajo y se conserva su estructura.
+- [x] Mesa de Trabajo conserva Agenda, Programas activos, Bandeja, Asistente, Cálculo y Tesorería.
+- [x] La herramienta Minuta / acta ahora admite modalidad Híbrida, Presencial o Remota.
+- [x] Se capturan tipo de documento, título, fecha, hora, lugar, Meet, presidencia y secretaría.
+- [x] La asistencia se registra por persona, no como un texto único.
+- [x] Cada asistente distingue participación Presencial o Google Meet y su estado de asistencia.
+- [x] Participantes presenciales permiten registrar evidencia de firma autógrafa.
+- [x] Participantes remotos reciben un token/enlace individual de conformidad electrónica.
+- [x] La ruta pública de conformidad muestra únicamente la copia del acta asociada al token.
+- [x] La conformidad remota registra estado y fecha/hora sin denominarse firma electrónica avanzada.
+- [x] Firestore restringe al participante remoto a los campos mínimos de aceptación.
+- [x] Las actas conservan orden del día, desarrollo, acuerdos, responsables, fechas y observaciones.
+- [x] Guardar y cerrar incrementa versión documental y conserva trazabilidad de creación/actualización.
+- [x] Actas/minutas guardadas tienen acciones Editar, Imprimir y Eliminar.
+- [x] La impresión incorpora identidad institucional, asistencia, modalidad y evidencia de firma/conformidad.
+- [x] El flujo puede vincularse al programa/actividad que esté en foco en la Mesa de Trabajo.
+- [x] No se modificó la lógica de padrón, elegibilidad, Becas, Dental, Plan de Prima ni Tesorería.
+- [x] El portal público normal sigue siendo la ruta predeterminada; `?internal` conserva acceso a Mesa.
+- [x] La nueva ruta `?firmaActa=TOKEN` se evalúa antes del portal y del acceso interno.
+- [ ] Compilación Vite no ejecutada en este entorno: la instalación de dependencias agotó el límite de ejecución; se realizó revisión estructural de archivos y de integración.
