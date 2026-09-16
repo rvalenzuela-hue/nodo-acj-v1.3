@@ -116,7 +116,7 @@ service cloud.firestore {
       allow read, update, delete: if known();
     }
     match /indicadoresImpacto/{id} { allow read: if known(); allow create, update, delete: if isManagement(); }
-    match /agendaMesa/{id} { allow read: if known(); allow create, update, delete: if known(); }
+    match /agendaMesa/{id} { allow read, create, update, delete: if signedIn(); }
     match /tesoreriaSolicitudes/{id} { allow read: if known(); allow create, update: if known(); allow delete: if isManagement(); }
     match /minutasMesa/{id} { allow read: if known(); allow create, update: if known(); allow delete: if isManagement(); }
     match /actaFirmas/{token} {
