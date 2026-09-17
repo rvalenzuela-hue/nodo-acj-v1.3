@@ -199,7 +199,7 @@ exports.manageSigner=onRequest({region:'us-central1',cors:false,timeoutSeconds:3
   try{
     const decoded=await verifyBearer(req);if(!(await managerAllowed(decoded)))return res.status(403).json({ok:false,error:'No tienes permiso para administrar cuentas firmantes.'});
     const body=req.body&&typeof req.body==='object'?req.body:{};
-    const username=normalizeUsername(body.username),previousUsername=normalizeUsername(body.previousUsername||''),nombre=clean(body.nombre,250),password=String(body.temporaryPassword||'');
+    const username=normalizeUsername(body.username),previousUsername=normalizeUsername(body.previousUsername||''),nombre=clean(body.nombre,250),cargo=clean(body.cargo,120),password=String(body.temporaryPassword||'');
     if(!/^[a-z0-9._-]{4,32}$/.test(username))return res.status(400).json({ok:false,error:'Nombre de usuario no válido. Usa 4 a 32 caracteres: letras minúsculas, números, punto, guion o guion bajo.'});
     const email=signerAuthEmail(username),previousEmail=previousUsername?signerAuthEmail(previousUsername):'';
     let user;let created=false;
@@ -208,7 +208,7 @@ exports.manageSigner=onRequest({region:'us-central1',cors:false,timeoutSeconds:3
     if(!created){await admin.auth().updateUser(user.uid,{displayName:nombre||user.displayName||username,disabled:body.activo===false});}
     const now=new Date().toISOString(),db=admin.firestore();
     const profileId=email;
-    await db.collection('usuariosNodo').doc(profileId).set({email,usuario:username,nombre:nombre||user.displayName||'',alcance:'Firmas',rol:'Firmante',activo:body.activo!==false,uid:user.uid,actualizadoEn:now,otorgadoPor:decoded.email||decoded.uid},{merge:true});
+    await db.collection('usuariosNodo').doc(profileId).set({email,usuario:username,nombre:nombre||user.displayName||'',cargo,alcance:'Firmas',rol:'Firmante',activo:body.activo!==false,uid:user.uid,actualizadoEn:now,otorgadoPor:decoded.email||decoded.uid},{merge:true});
     if(previousEmail&&previousEmail!==email)await db.collection('usuariosNodo').doc(previousEmail).delete().catch(()=>{});
     return res.status(200).json({ok:true,created,uid:user.uid,username,profileId});
   }catch(error){logger.error('manageSigner failed',{message:error?.message,code:error?.code});return res.status(error?.status||500).json({ok:false,error:'No fue posible crear o actualizar la cuenta firmante.'});}
