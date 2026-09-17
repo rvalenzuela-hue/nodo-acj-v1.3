@@ -194,7 +194,7 @@ function actaSnapshot(data){return {
 };}
 function documentHash(data){return crypto.createHash('sha256').update(stable(actaSnapshot(data)),'utf8').digest('hex');}
 
-exports.manageSigner=onRequest({region:'us-central1',cors:false,timeoutSeconds:30,memory:'256MiB'},async(req,res)=>{
+exports.manageSigner=onRequest({region:'us-central1',cors:true,timeoutSeconds:30,memory:'256MiB'},async(req,res)=>{
   if(req.method!=='POST'){res.set('Allow','POST');return res.status(405).json({ok:false,error:'Método no permitido.'});}
   try{
     const decoded=await verifyBearer(req);if(!(await managerAllowed(decoded)))return res.status(403).json({ok:false,error:'No tienes permiso para administrar cuentas firmantes.'});
@@ -214,7 +214,7 @@ exports.manageSigner=onRequest({region:'us-central1',cors:false,timeoutSeconds:3
   }catch(error){logger.error('manageSigner failed',{message:error?.message,code:error?.code});return res.status(error?.status||500).json({ok:false,error:'No fue posible crear o actualizar la cuenta firmante.'});}
 });
 
-exports.signingPin=onRequest({region:'us-central1',cors:false,timeoutSeconds:30,memory:'256MiB'},async(req,res)=>{
+exports.signingPin=onRequest({region:'us-central1',cors:true,timeoutSeconds:30,memory:'256MiB'},async(req,res)=>{
   if(req.method!=='POST'){res.set('Allow','POST');return res.status(405).json({ok:false,error:'Método no permitido.'});}
   try{
     const decoded=await verifyBearer(req),body=req.body&&typeof req.body==='object'?req.body:{};
@@ -229,7 +229,7 @@ exports.signingPin=onRequest({region:'us-central1',cors:false,timeoutSeconds:30,
   }catch(error){logger.error('signingPin failed',{message:error?.message,code:error?.code});return res.status(error?.status||500).json({ok:false,error:error?.status===401?'Sesión no autorizada.':'No fue posible configurar el PIN.'});}
 });
 
-exports.signActa=onRequest({region:'us-central1',cors:false,timeoutSeconds:30,memory:'256MiB'},async(req,res)=>{
+exports.signActa=onRequest({region:'us-central1',cors:true,timeoutSeconds:30,memory:'256MiB'},async(req,res)=>{
   if(req.method!=='POST'){res.set('Allow','POST');return res.status(405).json({ok:false,error:'Método no permitido.'});}
   try{
     const decoded=await verifyBearer(req),body=req.body&&typeof req.body==='object'?req.body:{};

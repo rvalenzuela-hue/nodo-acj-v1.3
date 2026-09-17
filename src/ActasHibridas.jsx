@@ -105,25 +105,33 @@ export default function ActasHibridas({focus,onChanged}){
     try{const u=new URL(window.location.href);u.search='';u.hash='';u.searchParams.set('firmas','1');return u.toString();}
     catch{return `${window.location.origin}${window.location.pathname||'/'}?firmas=1`;}
   }
-  function copyLink(p){
-    const text=linkFor();let copied=false;
-    try{
-      const ta=document.createElement('textarea');
-      ta.value=text;ta.setAttribute('readonly','');
-      ta.style.position='fixed';ta.style.left='-9999px';ta.style.top='0';
-      document.body.appendChild(ta);ta.focus();ta.select();ta.setSelectionRange(0,text.length);
-      copied=!!document.execCommand('copy');document.body.removeChild(ta);
-    }catch(e){console.error('Copia clásica falló',e);}
-    if(copied){setMsg(`Enlace del Portal de Firmas copiado para ${p.nombre}.`);return;}
-    if(navigator.clipboard?.writeText){
-      navigator.clipboard.writeText(text).then(()=>setMsg(`Enlace del Portal de Firmas copiado para ${p.nombre}.`)).catch(()=>{
-        setMsg(`El navegador bloqueó la copia. Se abrió el Portal de Firmas; enlace: ${text}`);
-        window.open(text,'_blank','noopener,noreferrer');
-      });
+  async function copyLink(p){
+    const text=linkFor();
+    let copied=false;
+    // 1) Clipboard API cuando está permitido (HTTPS/localhost).
+    if(window.isSecureContext && navigator.clipboard?.writeText){
+      try{await navigator.clipboard.writeText(text);copied=true;}catch(e){console.warn('Clipboard API bloqueada',e);}
+    }
+    // 2) Respaldo compatible para navegadores/instalaciones donde Clipboard API está bloqueada.
+    if(!copied){
+      let ta=null;
+      try{
+        ta=document.createElement('textarea');
+        ta.value=text;
+        ta.setAttribute('readonly','');
+        ta.style.position='fixed';ta.style.left='0';ta.style.top='0';ta.style.width='2px';ta.style.height='2px';ta.style.opacity='0.01';
+        document.body.appendChild(ta);
+        ta.focus();ta.select();ta.setSelectionRange(0,ta.value.length);
+        copied=document.execCommand('copy')===true;
+      }catch(e){console.warn('Copia clásica bloqueada',e);}finally{if(ta?.parentNode)ta.parentNode.removeChild(ta);}
+    }
+    if(copied){
+      setMsg(`✓ Enlace del Portal de Firmas copiado: ${text}`);
       return;
     }
-    setMsg(`El navegador bloqueó la copia. Se abrió el Portal de Firmas; enlace: ${text}`);
-    window.open(text,'_blank','noopener,noreferrer');
+    // 3) No fingir éxito: mostrar el enlace seleccionado para copia manual.
+    setMsg(`No fue posible copiar automáticamente. Copia este enlace: ${text}`);
+    try{window.prompt('Copia el enlace del Portal de Firmas:',text);}catch{}
   }
   function openSigningPortal(){window.open(linkFor(),'_blank','noopener,noreferrer');}
   function sendWhatsApp(p){
