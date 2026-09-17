@@ -1,4 +1,4 @@
-NODO Asociación v0.8.56
+NODO Asociación v0.8.57
 
 Corrección: Agenda con Editar, Imprimir y Eliminar visibles, edición real del registro y manejo de errores.
 
