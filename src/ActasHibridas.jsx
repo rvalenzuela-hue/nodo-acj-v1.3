@@ -1,5 +1,5 @@
 import React,{useEffect,useMemo,useState} from 'react';
-import {collection,deleteDoc,doc,getDocs,setDoc} from 'firebase/firestore';
+import {collection,deleteDoc,doc,getDoc,getDocs,setDoc} from 'firebase/firestore';
 import {auth,db} from './firebase';
 
 const green='#31533a',bright='#3dad2d',border='#dfe5dc',muted='#667268';
@@ -14,11 +14,34 @@ const esc=(s='')=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'
 
 export default function ActasHibridas({focus,onChanged}){
   const [form,setForm]=useState(blankActa()),[editing,setEditing]=useState(null),[items,setItems]=useState([]),[firmas,setFirmas]=useState([]),[signers,setSigners]=useState([]),[msg,setMsg]=useState(''),[busy,setBusy]=useState(false);
+  const initialSignerUsers=['prejvalenzuela26','teshfigueroa26','secolegaria26','vocal101','vocal102','vocal103','vocal104','vocal105'];
+  const normalizeSigner=v=>String(v||'').trim().toLowerCase().replace(/\s+/g,'');
+  async function loadSigners(){
+    const byUser=new Map();
+    try{
+      const snap=await getDocs(collection(db,'usuariosNodo'));
+      for(const d of snap.docs){
+        const x={id:d.id,...d.data()};
+        const usuario=normalizeSigner(x.usuario),rol=normalizeSigner(x.rol),alcance=normalizeSigner(x.alcance);
+        if(usuario&&x.activo!==false&&(rol==='firmante'||alcance==='firmas')) byUser.set(usuario,{...x,usuario});
+      }
+    }catch(e){console.error('No fue posible listar usuariosNodo para Minutas',e);}
+    await Promise.all(initialSignerUsers.map(async usuario=>{
+      if(byUser.has(usuario))return;
+      try{
+        const d=await getDoc(doc(db,'usuariosNodo',`${usuario}@firmas.nodo.app`));
+        if(d.exists()){const x={id:d.id,...d.data()};if(x.activo!==false)byUser.set(usuario,{...x,usuario:normalizeSigner(x.usuario)||usuario});}
+      }catch(e){console.error(`No fue posible leer firmante ${usuario}`,e);}
+    }));
+    const list=Array.from(byUser.values()).sort((a,b)=>String(a.nombre||a.usuario).localeCompare(String(b.nombre||b.usuario),'es'));
+    setSigners(list);
+    return list;
+  }
   async function load(){
-    const [a,f,u]=await Promise.all([getDocs(collection(db,'minutasMesa')).catch(()=>({docs:[]})),getDocs(collection(db,'actaFirmas')).catch(()=>({docs:[]})),getDocs(collection(db,'usuariosNodo')).catch(()=>({docs:[]}))]);
+    const [a,f]=await Promise.all([getDocs(collection(db,'minutasMesa')).catch(()=>({docs:[]})),getDocs(collection(db,'actaFirmas')).catch(()=>({docs:[]}))]);
     setItems(a.docs.map(d=>({id:d.id,...d.data()})).sort((x,y)=>String(y.fecha||y.creadoEn||'').localeCompare(String(x.fecha||x.creadoEn||''))));
     setFirmas(f.docs.map(d=>({id:d.id,...d.data()})));
-    setSigners(u.docs.map(d=>({id:d.id,...d.data()})).filter(x=>x.rol==='Firmante'&&x.activo!==false));
+    await loadSigners();
   }
   useEffect(()=>{load()},[]);
   const merged=useMemo(()=>items.map(x=>({...x,participantes:(x.participantes||[]).map(p=>{const f=firmas.find(s=>s.actaId===x.id&&s.participanteId===p.id);return f?{...p,firmaTipo:p.firmaTipo||(p.participacion==='Google Meet'?'Firma NODO':'Firma autógrafa'),firmaEstado:f.estado||p.firmaEstado,conformidadEn:f.conformidadEn||p.conformidadEn,firmaMetodo:f.metodo||p.firmaMetodo,firmaNodo:f.firmaNodo||p.firmaNodo||null,avisoWhatsAppEn:f.avisoWhatsAppEn||p.avisoWhatsAppEn||''}:{...p,firmaTipo:p.firmaTipo||(p.participacion==='Google Meet'?'Firma NODO':'Firma autógrafa')};})})),[items,firmas]);
@@ -109,6 +132,7 @@ export default function ActasHibridas({focus,onChanged}){
       <input style={input} placeholder="Lugar físico" value={form.lugar} onChange={e=>setForm({...form,lugar:e.target.value})}/>
       {form.modalidad!=='Presencial'&&<input style={input} placeholder="Enlace de Google Meet" value={form.meetUrl} onChange={e=>setForm({...form,meetUrl:e.target.value})}/>} 
       <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:6}}><input style={input} placeholder="Quien preside" value={form.preside} onChange={e=>setForm({...form,preside:e.target.value})}/><input style={input} placeholder="Secretaría / quien levanta el acta" value={form.secretaria} onChange={e=>setForm({...form,secretaria:e.target.value})}/></div>
+      <div style={{display:'flex',alignItems:'center',gap:7,flexWrap:'wrap',fontSize:11,color:muted}}><b style={{color:green}}>Cuentas firmantes disponibles: {signers.length}</b><button type="button" style={btn('secondary')} onClick={async()=>{const list=await loadSigners();setMsg(list.length?`Se cargaron ${list.length} cuentas firmantes.`:'No se encontraron cuentas firmantes activas. Revisa Accesos.');}}>Actualizar firmantes</button></div>
       <details open><summary style={{cursor:'pointer',fontWeight:800,color:green,fontSize:12}}>Asistentes ({form.participantes.length})</summary><div style={{display:'grid',gap:7,marginTop:7}}>{form.participantes.map((p,i)=><div key={p.id} style={{border:`1px solid ${border}`,borderRadius:8,padding:7,background:'#f9faf8'}}><input style={{...input,marginBottom:5}} placeholder="Nombre completo" value={p.nombre} onChange={e=>updateP(i,'nombre',e.target.value)}/><input style={{...input,marginBottom:5}} placeholder="Cargo / carácter" value={p.cargo} onChange={e=>updateP(i,'cargo',e.target.value)}/>{p.firmaTipo==='Firma NODO'&&<select style={{...input,marginBottom:5}} value={p.usuarioFirmante||''} onChange={e=>assignSigner(i,e.target.value)}><option value="">Selecciona cuenta firmante</option>{signers.map(sg=><option key={sg.uid||sg.usuario} value={sg.usuario}>{sg.usuario} · {sg.nombre||'Sin nombre'}</option>)}</select>}<div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:5}}><select style={input} value={p.participacion} onChange={e=>updateParticipation(i,e.target.value)}><option>Presencial</option><option>Google Meet</option></select><select style={input} value={p.asistencia} onChange={e=>updateP(i,'asistencia',e.target.value)}><option>Presente</option><option>Ausente</option><option>Invitado</option></select><select style={input} value={p.firmaTipo||'Firma autógrafa'} onChange={e=>updateP(i,'firmaTipo',e.target.value)}><option>Firma autógrafa</option><option>Firma NODO</option><option>No requiere firma</option></select></div><div style={{display:'flex',gap:5,marginTop:6,flexWrap:'wrap'}}>{p.firmaTipo==='Firma autógrafa'&&<button style={btn('secondary')} onClick={()=>markAutograph(i)}>Registrar firma autógrafa</button>}{p.firmaTipo==='Firma NODO'&&p.firmaToken&&<>{form.estado==='Cerrada'?<><button style={btn('secondary')} onClick={()=>copyLink(p)}>Copiar Portal de Firmas</button><button style={btn('secondary')} onClick={()=>sendWhatsApp(p)}>Notificar por WhatsApp</button></>:<span style={{fontSize:10,color:muted,padding:'8px 0'}}>La firma se habilita al cerrar el acta.</span>}</>}<button style={btn('danger')} onClick={()=>removeP(i)}>Quitar</button></div><div style={{fontSize:10,color:muted,marginTop:4}}>Estado: {p.firmaEstado||'Pendiente'}{p.firmaTipo==='Firma NODO'?(hasSignerAccount(p)?` · usuario ${p.usuarioFirmante}`:' · ⚠ cuenta firmante no seleccionada'):''}{p.conformidadEn?` · firma ${new Date(p.conformidadEn).toLocaleString('es-MX')}`:''}{p.firmaNodo?.signatureCode?` · ${p.firmaNodo.signatureCode}`:''}{p.avisoWhatsAppEn?` · aviso WhatsApp ${new Date(p.avisoWhatsAppEn).toLocaleString('es-MX')}`:''}</div></div>)}</div><button style={{...btn('secondary'),marginTop:7}} onClick={addP}>+ Agregar asistente</button></details>
       <textarea style={{...input,minHeight:62}} placeholder="Orden del día" value={form.ordenDia} onChange={e=>setForm({...form,ordenDia:e.target.value})}/>
       <textarea style={{...input,minHeight:70}} placeholder="Desarrollo de la reunión" value={form.desarrollo} onChange={e=>setForm({...form,desarrollo:e.target.value})}/>
