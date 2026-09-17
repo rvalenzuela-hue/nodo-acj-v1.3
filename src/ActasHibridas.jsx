@@ -1,5 +1,5 @@
 import React,{useEffect,useMemo,useState} from 'react';
-import {collection,deleteDoc,doc,getDoc,getDocs,setDoc} from 'firebase/firestore';
+import {collection,deleteDoc,doc,getDocs,setDoc} from 'firebase/firestore';
 import {auth,db} from './firebase';
 
 const green='#31533a',bright='#3dad2d',border='#dfe5dc',muted='#667268';
@@ -13,35 +13,12 @@ const blankActa=()=>({tipoDocumento:'Minuta',titulo:'',fecha:today(),hora:'',lug
 const esc=(s='')=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
 
 export default function ActasHibridas({focus,onChanged}){
-  const [form,setForm]=useState(blankActa()),[editing,setEditing]=useState(null),[items,setItems]=useState([]),[firmas,setFirmas]=useState([]),[signers,setSigners]=useState([]),[msg,setMsg]=useState(''),[busy,setBusy]=useState(false);
-  const initialSignerUsers=['prejvalenzuela26','teshfigueroa26','secolegaria26','vocal101','vocal102','vocal103','vocal104','vocal105'];
-  const normalizeSigner=v=>String(v||'').trim().toLowerCase().replace(/\s+/g,'');
-  async function loadSigners(){
-    const byUser=new Map();
-    try{
-      const snap=await getDocs(collection(db,'usuariosNodo'));
-      for(const d of snap.docs){
-        const x={id:d.id,...d.data()};
-        const usuario=normalizeSigner(x.usuario),rol=normalizeSigner(x.rol),alcance=normalizeSigner(x.alcance);
-        if(usuario&&x.activo!==false&&(rol==='firmante'||alcance==='firmas')) byUser.set(usuario,{...x,usuario});
-      }
-    }catch(e){console.error('No fue posible listar usuariosNodo para Minutas',e);}
-    await Promise.all(initialSignerUsers.map(async usuario=>{
-      if(byUser.has(usuario))return;
-      try{
-        const d=await getDoc(doc(db,'usuariosNodo',`${usuario}@firmas.nodo.app`));
-        if(d.exists()){const x={id:d.id,...d.data()};if(x.activo!==false)byUser.set(usuario,{...x,usuario:normalizeSigner(x.usuario)||usuario});}
-      }catch(e){console.error(`No fue posible leer firmante ${usuario}`,e);}
-    }));
-    const list=Array.from(byUser.values()).sort((a,b)=>String(a.nombre||a.usuario).localeCompare(String(b.nombre||b.usuario),'es'));
-    setSigners(list);
-    return list;
-  }
+  const [form,setForm]=useState(blankActa()),[editing,setEditing]=useState(null),[items,setItems]=useState([]),[firmas,setFirmas]=useState([]),[signers,setSigners]=useState([]),[msg,setMsg]=useState(''),[busy,setBusy]=useState(false),[linkModal,setLinkModal]=useState(null);
   async function load(){
-    const [a,f]=await Promise.all([getDocs(collection(db,'minutasMesa')).catch(()=>({docs:[]})),getDocs(collection(db,'actaFirmas')).catch(()=>({docs:[]}))]);
+    const [a,f,u]=await Promise.all([getDocs(collection(db,'minutasMesa')).catch(()=>({docs:[]})),getDocs(collection(db,'actaFirmas')).catch(()=>({docs:[]})),getDocs(collection(db,'usuariosNodo')).catch(()=>({docs:[]}))]);
     setItems(a.docs.map(d=>({id:d.id,...d.data()})).sort((x,y)=>String(y.fecha||y.creadoEn||'').localeCompare(String(x.fecha||x.creadoEn||''))));
     setFirmas(f.docs.map(d=>({id:d.id,...d.data()})));
-    await loadSigners();
+    setSigners(u.docs.map(d=>({id:d.id,...d.data()})).filter(x=>x.rol==='Firmante'&&x.activo!==false));
   }
   useEffect(()=>{load()},[]);
   const merged=useMemo(()=>items.map(x=>({...x,participantes:(x.participantes||[]).map(p=>{const f=firmas.find(s=>s.actaId===x.id&&s.participanteId===p.id);return f?{...p,firmaTipo:p.firmaTipo||(p.participacion==='Google Meet'?'Firma NODO':'Firma autógrafa'),firmaEstado:f.estado||p.firmaEstado,conformidadEn:f.conformidadEn||p.conformidadEn,firmaMetodo:f.metodo||p.firmaMetodo,firmaNodo:f.firmaNodo||p.firmaNodo||null,avisoWhatsAppEn:f.avisoWhatsAppEn||p.avisoWhatsAppEn||''}:{...p,firmaTipo:p.firmaTipo||(p.participacion==='Google Meet'?'Firma NODO':'Firma autógrafa')};})})),[items,firmas]);
@@ -101,39 +78,35 @@ export default function ActasHibridas({focus,onChanged}){
     }finally{setBusy(false)}
   }
   async function del(x){if(!confirm(`¿Eliminar “${x.titulo}”?`))return;for(const p of x.participantes||[]){if(p.firmaToken)await deleteDoc(doc(db,'actaFirmas',p.firmaToken)).catch(()=>{});}await deleteDoc(doc(db,'minutasMesa',x.id));if(editing===x.id)reset();await load();onChanged?.();}
-  function linkFor(){
-    try{const u=new URL(window.location.href);u.search='';u.hash='';u.searchParams.set('firmas','1');return u.toString();}
-    catch{return `${window.location.origin}${window.location.pathname||'/'}?firmas=1`;}
+  function linkFor(){return `${window.location.origin}/?firmas=1`;}
+  async function copyToClipboard(text){
+    if(navigator.clipboard?.writeText){
+      try{await navigator.clipboard.writeText(text);return true;}catch(e){console.error('navigator.clipboard.writeText falló',e);}
+    }
+    // Alternativa cuando la API de portapapeles no está disponible (contexto no seguro,
+    // permisos bloqueados por el navegador, ventana sin foco, extensión que intercepta, etc.).
+    try{
+      const ta=document.createElement('textarea');
+      ta.value=text;ta.setAttribute('readonly','');ta.style.position='fixed';ta.style.left='-9999px';
+      document.body.appendChild(ta);ta.focus();ta.select();ta.setSelectionRange(0,text.length);
+      const ok=document.execCommand('copy');
+      document.body.removeChild(ta);
+      return ok;
+    }catch(e){console.error('Alternativa de copiado falló',e);return false;}
   }
   async function copyLink(p){
-    const text=linkFor();
-    let copied=false;
-    // 1) Clipboard API cuando está permitido (HTTPS/localhost).
-    if(window.isSecureContext && navigator.clipboard?.writeText){
-      try{await navigator.clipboard.writeText(text);copied=true;}catch(e){console.warn('Clipboard API bloqueada',e);}
+    const link=linkFor(p);
+    const ok=await copyToClipboard(link);
+    if(ok){setMsg(`Enlace del Portal de Firmas copiado para ${p.nombre}.`);setLinkModal(null);}
+    else{
+      // Ningún método automático funcionó (típico cuando el navegador exige que la copia
+      // ocurra dentro del clic del usuario que abre este cuadro, o bloquea el portapapeles
+      // por completo). Se muestra el enlace en un campo seleccionado para copiarlo a mano
+      // con Ctrl+C / Cmd+C, y un botón que reintenta la copia automática con este nuevo clic.
+      setMsg('');
+      setLinkModal({nombre:p.nombre,link});
     }
-    // 2) Respaldo compatible para navegadores/instalaciones donde Clipboard API está bloqueada.
-    if(!copied){
-      let ta=null;
-      try{
-        ta=document.createElement('textarea');
-        ta.value=text;
-        ta.setAttribute('readonly','');
-        ta.style.position='fixed';ta.style.left='0';ta.style.top='0';ta.style.width='2px';ta.style.height='2px';ta.style.opacity='0.01';
-        document.body.appendChild(ta);
-        ta.focus();ta.select();ta.setSelectionRange(0,ta.value.length);
-        copied=document.execCommand('copy')===true;
-      }catch(e){console.warn('Copia clásica bloqueada',e);}finally{if(ta?.parentNode)ta.parentNode.removeChild(ta);}
-    }
-    if(copied){
-      setMsg(`✓ Enlace del Portal de Firmas copiado: ${text}`);
-      return;
-    }
-    // 3) No fingir éxito: mostrar el enlace seleccionado para copia manual.
-    setMsg(`No fue posible copiar automáticamente. Copia este enlace: ${text}`);
-    try{window.prompt('Copia el enlace del Portal de Firmas:',text);}catch{}
   }
-  function openSigningPortal(){window.open(linkFor(),'_blank','noopener,noreferrer');}
   function sendWhatsApp(p){
     const text=`${p.nombre||'Hola'}, tienes un documento pendiente de firma en NODO: ${form.tipoDocumento||'Acta'}${form.titulo?` “${form.titulo}”`:''}. Usuario: ${p.usuarioFirmante||'tu usuario NODO'}. Ingresa, revisa la versión definitiva y firma con tu PIN: ${linkFor(p)}`;
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`,'_blank','noopener,noreferrer');
@@ -155,8 +128,7 @@ export default function ActasHibridas({focus,onChanged}){
       <input style={input} placeholder="Lugar físico" value={form.lugar} onChange={e=>setForm({...form,lugar:e.target.value})}/>
       {form.modalidad!=='Presencial'&&<input style={input} placeholder="Enlace de Google Meet" value={form.meetUrl} onChange={e=>setForm({...form,meetUrl:e.target.value})}/>} 
       <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:6}}><input style={input} placeholder="Quien preside" value={form.preside} onChange={e=>setForm({...form,preside:e.target.value})}/><input style={input} placeholder="Secretaría / quien levanta el acta" value={form.secretaria} onChange={e=>setForm({...form,secretaria:e.target.value})}/></div>
-      <div style={{display:'flex',alignItems:'center',gap:7,flexWrap:'wrap',fontSize:11,color:muted}}><b style={{color:green}}>Cuentas firmantes disponibles: {signers.length}</b><button type="button" style={btn('secondary')} onClick={async()=>{const list=await loadSigners();setMsg(list.length?`Se cargaron ${list.length} cuentas firmantes.`:'No se encontraron cuentas firmantes activas. Revisa Accesos.');}}>Actualizar firmantes</button></div>
-      <details open><summary style={{cursor:'pointer',fontWeight:800,color:green,fontSize:12}}>Asistentes ({form.participantes.length})</summary><div style={{display:'grid',gap:7,marginTop:7}}>{form.participantes.map((p,i)=><div key={p.id} style={{border:`1px solid ${border}`,borderRadius:8,padding:7,background:'#f9faf8'}}><input style={{...input,marginBottom:5}} placeholder="Nombre completo" value={p.nombre} onChange={e=>updateP(i,'nombre',e.target.value)}/><input style={{...input,marginBottom:5}} placeholder="Cargo / carácter" value={p.cargo} onChange={e=>updateP(i,'cargo',e.target.value)}/>{p.firmaTipo==='Firma NODO'&&<select style={{...input,marginBottom:5}} value={p.usuarioFirmante||''} onChange={e=>assignSigner(i,e.target.value)}><option value="">Selecciona cuenta firmante</option>{signers.map(sg=><option key={sg.uid||sg.usuario} value={sg.usuario}>{sg.usuario} · {sg.nombre||'Sin nombre'}</option>)}</select>}<div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:5}}><select style={input} value={p.participacion} onChange={e=>updateParticipation(i,e.target.value)}><option>Presencial</option><option>Google Meet</option></select><select style={input} value={p.asistencia} onChange={e=>updateP(i,'asistencia',e.target.value)}><option>Presente</option><option>Ausente</option><option>Invitado</option></select><select style={input} value={p.firmaTipo||'Firma autógrafa'} onChange={e=>updateP(i,'firmaTipo',e.target.value)}><option>Firma autógrafa</option><option>Firma NODO</option><option>No requiere firma</option></select></div><div style={{display:'flex',gap:5,marginTop:6,flexWrap:'wrap'}}>{p.firmaTipo==='Firma autógrafa'&&<button style={btn('secondary')} onClick={()=>markAutograph(i)}>Registrar firma autógrafa</button>}{p.firmaTipo==='Firma NODO'&&p.firmaToken&&<>{form.estado==='Cerrada'?<><button type="button" style={btn('secondary')} onClick={()=>copyLink(p)}>Copiar enlace del Portal</button><button type="button" style={btn('secondary')} onClick={openSigningPortal}>Abrir Portal</button><button type="button" style={btn('secondary')} onClick={()=>sendWhatsApp(p)}>Notificar por WhatsApp</button></>:<span style={{fontSize:10,color:muted,padding:'8px 0'}}>La firma se habilita al cerrar el acta.</span>}</>}<button style={btn('danger')} onClick={()=>removeP(i)}>Quitar</button></div><div style={{fontSize:10,color:muted,marginTop:4}}>Estado: {p.firmaEstado||'Pendiente'}{p.firmaTipo==='Firma NODO'?(hasSignerAccount(p)?` · usuario ${p.usuarioFirmante}`:' · ⚠ cuenta firmante no seleccionada'):''}{p.conformidadEn?` · firma ${new Date(p.conformidadEn).toLocaleString('es-MX')}`:''}{p.firmaNodo?.signatureCode?` · ${p.firmaNodo.signatureCode}`:''}{p.avisoWhatsAppEn?` · aviso WhatsApp ${new Date(p.avisoWhatsAppEn).toLocaleString('es-MX')}`:''}</div></div>)}</div><button style={{...btn('secondary'),marginTop:7}} onClick={addP}>+ Agregar asistente</button></details>
+      <details open><summary style={{cursor:'pointer',fontWeight:800,color:green,fontSize:12}}>Asistentes ({form.participantes.length})</summary><div style={{display:'grid',gap:7,marginTop:7}}>{form.participantes.map((p,i)=><div key={p.id} style={{border:`1px solid ${border}`,borderRadius:8,padding:7,background:'#f9faf8'}}><input style={{...input,marginBottom:5}} placeholder="Nombre completo" value={p.nombre} onChange={e=>updateP(i,'nombre',e.target.value)}/><input style={{...input,marginBottom:5}} placeholder="Cargo / carácter" value={p.cargo} onChange={e=>updateP(i,'cargo',e.target.value)}/>{p.firmaTipo==='Firma NODO'&&<select style={{...input,marginBottom:5}} value={p.usuarioFirmante||''} onChange={e=>assignSigner(i,e.target.value)}><option value="">Selecciona cuenta firmante</option>{signers.map(sg=><option key={sg.uid||sg.usuario} value={sg.usuario}>{sg.usuario} · {sg.nombre||'Sin nombre'}</option>)}</select>}<div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:5}}><select style={input} value={p.participacion} onChange={e=>updateParticipation(i,e.target.value)}><option>Presencial</option><option>Google Meet</option></select><select style={input} value={p.asistencia} onChange={e=>updateP(i,'asistencia',e.target.value)}><option>Presente</option><option>Ausente</option><option>Invitado</option></select><select style={input} value={p.firmaTipo||'Firma autógrafa'} onChange={e=>updateP(i,'firmaTipo',e.target.value)}><option>Firma autógrafa</option><option>Firma NODO</option><option>No requiere firma</option></select></div><div style={{display:'flex',gap:5,marginTop:6,flexWrap:'wrap'}}>{p.firmaTipo==='Firma autógrafa'&&<button style={btn('secondary')} onClick={()=>markAutograph(i)}>Registrar firma autógrafa</button>}{p.firmaTipo==='Firma NODO'&&p.firmaToken&&<>{form.estado==='Cerrada'?<><button style={btn('secondary')} onClick={()=>copyLink(p)}>Copiar Portal de Firmas</button><button style={btn('secondary')} onClick={()=>sendWhatsApp(p)}>Notificar por WhatsApp</button></>:<span style={{fontSize:10,color:muted,padding:'8px 0'}}>La firma se habilita al cerrar el acta.</span>}</>}<button style={btn('danger')} onClick={()=>removeP(i)}>Quitar</button></div><div style={{fontSize:10,color:muted,marginTop:4}}>Estado: {p.firmaEstado||'Pendiente'}{p.firmaTipo==='Firma NODO'?(hasSignerAccount(p)?` · usuario ${p.usuarioFirmante}`:' · ⚠ cuenta firmante no seleccionada'):''}{p.conformidadEn?` · firma ${new Date(p.conformidadEn).toLocaleString('es-MX')}`:''}{p.firmaNodo?.signatureCode?` · ${p.firmaNodo.signatureCode}`:''}{p.avisoWhatsAppEn?` · aviso WhatsApp ${new Date(p.avisoWhatsAppEn).toLocaleString('es-MX')}`:''}</div></div>)}</div><button style={{...btn('secondary'),marginTop:7}} onClick={addP}>+ Agregar asistente</button></details>
       <textarea style={{...input,minHeight:62}} placeholder="Orden del día" value={form.ordenDia} onChange={e=>setForm({...form,ordenDia:e.target.value})}/>
       <textarea style={{...input,minHeight:70}} placeholder="Desarrollo de la reunión" value={form.desarrollo} onChange={e=>setForm({...form,desarrollo:e.target.value})}/>
       <textarea style={{...input,minHeight:90}} placeholder="Acuerdos, responsables y fechas" value={form.acuerdos} onChange={e=>setForm({...form,acuerdos:e.target.value})}/>
@@ -164,5 +136,16 @@ export default function ActasHibridas({focus,onChanged}){
       <div style={{display:'flex',gap:5,flexWrap:'wrap'}}><button disabled={busy||form.estado==='Cerrada'} style={{...btn(),opacity:(busy||form.estado==='Cerrada')?0.55:1}} onClick={()=>save(false)}>{busy?'Guardando…':editing?'Guardar cambios':'Guardar borrador'}</button><button disabled={busy||form.estado==='Cerrada'} style={{...btn('secondary'),opacity:(busy||form.estado==='Cerrada')?0.55:1}} onClick={()=>save(true)}>{form.estado==='Cerrada'?'Acta cerrada':busy?'Procesando…':'Cerrar acta'}</button>{editing&&<button style={btn('secondary')} onClick={()=>printActa({...form,id:editing})}>Imprimir</button>}<button style={btn('secondary')} onClick={reset}>Nueva</button></div>{msg&&<div style={{fontSize:11,color:green,fontWeight:800}}>{msg}</div>}
     </div>
     <details style={{marginTop:12}}><summary style={{cursor:'pointer',fontWeight:800,color:green,fontSize:12}}>Actas y minutas guardadas ({merged.length})</summary><div style={{display:'grid',gap:7,marginTop:7,maxHeight:330,overflow:'auto'}}>{merged.slice(0,20).map(x=><div key={x.id} style={{border:`1px solid ${border}`,borderRadius:8,padding:8}}><div style={{display:'flex',justifyContent:'space-between',gap:7}}><div><b style={{fontSize:11}}>{x.titulo}</b><div style={{fontSize:10,color:muted}}>{x.fecha} · {x.modalidad||'—'} · {x.estado||'Borrador'}</div></div><span style={{fontSize:10,color:green,fontWeight:800}}>{(x.participantes||[]).filter(p=>p.firmaEstado&&p.firmaEstado!=='Pendiente').length}/{(x.participantes||[]).length} conformidades/firmas</span></div><div style={{display:'flex',gap:5,marginTop:6,flexWrap:'wrap'}}><button style={btn('secondary')} onClick={()=>edit(x)}>Editar</button><button style={btn('secondary')} onClick={()=>printActa(x)}>Imprimir</button><button style={btn('danger')} onClick={()=>del(x)}>Eliminar</button>{(x.participantes||[]).filter(p=>p.firmaTipo==='Firma NODO'&&p.firmaToken).map(p=><button key={p.id} style={btn('secondary')} onClick={()=>copyLink(p)}>Enlace · {p.nombre.split(' ')[0]}{p.avisoWhatsAppEn?' · avisado':''}</button>)}</div></div>)}{!merged.length&&<div style={{fontSize:11,color:muted}}>Aún no hay actas guardadas.</div>}</div></details>
+    {linkModal&&<div style={{position:'fixed',inset:0,background:'rgba(20,30,20,.45)',display:'grid',placeItems:'center',zIndex:1000,padding:16}} onClick={()=>setLinkModal(null)}>
+      <div style={{background:'#fff',borderRadius:12,padding:18,width:'min(460px,100%)'}} onClick={e=>e.stopPropagation()}>
+        <h3 style={{margin:'0 0 4px',color:green,fontSize:14}}>Enlace del Portal de Firmas · {linkModal.nombre}</h3>
+        <p style={{fontSize:11,color:muted,margin:'0 0 10px'}}>El navegador no permitió copiarlo automáticamente. Está seleccionado: usa Ctrl+C (Windows) o Cmd+C (Mac), o pulsa “Copiar”.</p>
+        <input readOnly style={input} value={linkModal.link} onFocus={e=>e.target.select()} ref={el=>el&&el.focus()}/>
+        <div style={{display:'flex',gap:6,marginTop:10,flexWrap:'wrap'}}>
+          <button style={btn('primary')} onClick={async()=>{const ok=await copyToClipboard(linkModal.link);if(ok){setMsg(`Enlace del Portal de Firmas copiado para ${linkModal.nombre}.`);setLinkModal(null);}else{setMsg('Sigue sin poder copiarse automáticamente; selecciona el texto y usa Ctrl+C / Cmd+C.');}}}>Copiar</button>
+          <button style={btn('secondary')} onClick={()=>setLinkModal(null)}>Cerrar</button>
+        </div>
+      </div>
+    </div>}
   </div>;
 }

@@ -315,35 +315,15 @@ function CambiarContrasena({onClose}){
 }
 
 function FirmasPanel(){
-  const [copyMsg,setCopyMsg]=useState('');
-  function portalUrl(){
-    try{const u=new URL(window.location.href);u.search='';u.hash='';u.searchParams.set('firmas','1');return u.toString();}
-    catch{return `${window.location.origin}/?firmas=1`;}
-  }
-  async function copiarPortal(){
-    const text=portalUrl();let copied=false;
-    if(window.isSecureContext && navigator.clipboard?.writeText){
-      try{await navigator.clipboard.writeText(text);copied=true;}catch(e){console.warn('Clipboard API bloqueada',e);}
-    }
-    if(!copied){
-      let ta=null;
-      try{ta=document.createElement('textarea');ta.value=text;ta.setAttribute('readonly','');ta.style.position='fixed';ta.style.left='0';ta.style.top='0';ta.style.width='2px';ta.style.height='2px';ta.style.opacity='0.01';document.body.appendChild(ta);ta.focus();ta.select();ta.setSelectionRange(0,ta.value.length);copied=document.execCommand('copy')===true;}catch(e){console.warn('Copia clásica bloqueada',e);}finally{if(ta?.parentNode)ta.parentNode.removeChild(ta);}
-    }
-    if(copied){setCopyMsg(`✓ Enlace copiado: ${text}`);return;}
-    setCopyMsg(`Copia manualmente este enlace: ${text}`);
-    try{window.prompt('Copia el enlace del Portal de Firmas:',text);}catch{}
-  }
   return <div style={{display:'grid',gap:14}}>
     <section style={{background:'#fff',border:`1px solid ${border}`,borderRadius:12,padding:18}}>
       <h2 style={{color:green,margin:'0 0 6px'}}>Portal de Firmas NODO</h2>
       <p style={{margin:'0 0 14px',fontSize:13,color:muted}}>Acceso independiente para integrantes que deben revisar y firmar actas cerradas. Los firmantes ingresan con nombre de usuario, contraseña y PIN de firma; no requieren correo.</p>
       <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
-        <button type="button" style={btn('primary')} onClick={copiarPortal}>Copiar enlace del Portal de Firmas</button>
-        <button type="button" style={btn('secondary')} onClick={()=>window.open(portalUrl(),'_blank','noopener,noreferrer')}>Abrir Portal de Firmas</button>
-        <button type="button" style={btn('secondary')} onClick={()=>{window.location.href='/?internal=1&tab=accesos'}}>Administrar cuentas firmantes</button>
+        <button style={btn('primary')} onClick={()=>window.open('/?firmas=1','_blank')}>Abrir Portal de Firmas</button>
+        <button style={btn('secondary')} onClick={()=>{window.location.href='/?internal=1&tab=accesos'}}>Administrar cuentas firmantes</button>
       </div>
-      <div style={{marginTop:14,padding:12,background:'#f4f8f2',borderRadius:9,fontSize:12,wordBreak:'break-all'}}><b>Ruta directa:</b> {portalUrl()}</div>
-      {copyMsg&&<div style={{marginTop:8,padding:10,background:'#fff8dd',borderRadius:8,fontSize:12,wordBreak:'break-all'}}>{copyMsg}</div>}
+      <div style={{marginTop:14,padding:12,background:'#f4f8f2',borderRadius:9,fontSize:12}}><b>Ruta directa:</b> {window.location.origin}/?firmas=1</div>
     </section>
   </div>
 }

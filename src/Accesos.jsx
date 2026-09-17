@@ -2,7 +2,6 @@ import React,{useEffect,useMemo,useState} from 'react';
 import {collection,deleteDoc,doc,getDocs,setDoc} from 'firebase/firestore';
 import {auth,db} from './firebase';
 import {manageSignerAccount} from './config/signingApi';
-import {bootstrapSignerLocally} from './config/signerBootstrap';
 import {printRecords,toggleSelection,selectAll} from './recordTools';
 const green='#31533a',border='#dfe5dc',bright='#3dad2d';const input={width:'100%',padding:'9px 11px',boxSizing:'border-box',border:`1px solid ${border}`,borderRadius:8};
 const btn=(kind='secondary')=>({border:0,borderRadius:8,padding:'9px 12px',fontWeight:800,cursor:'pointer',background:kind==='primary'?bright:kind==='danger'?'#b93333':'#e8eee6',color:kind==='primary'||kind==='danger'?'#fff':green});
@@ -20,21 +19,6 @@ const initialSigners=[
 ];
 const cols=[{label:'Nombre',key:'nombre'},{label:'Cargo',key:'cargo'},{label:'Usuario / correo',value:x=>x.rol==='Firmante'?(x.usuario||'—'):(x.email||'—')},{label:'Alcance',key:'alcance'},{label:'Rol',key:'rol'},{label:'Activo',value:x=>x.activo!==false?'Sí':'No'}];
 const normalizeUser=v=>String(v||'').trim().toLowerCase().replace(/\s+/g,'');
-async function createSignerWithFallback(payload){
- try{return await manageSignerAccount(payload)}
- catch(primaryError){
-  const message=String(primaryError?.message||'');
-  // Cuando /api no está publicado (instalación local/Hosting sin Functions), crear la cuenta
-  // con una instancia secundaria de Auth para conservar la sesión administrativa.
-  if(payload.previousUsername) throw primaryError;
-  try{return await bootstrapSignerLocally(payload)}
-  catch(fallbackError){
-   const code=String(fallbackError?.code||'');
-   if(code==='auth/email-already-in-use') throw new Error(`La cuenta ${payload.username} ya existe en Authentication pero falta sincronizar su perfil. Despliega Functions y vuelve a abrir Accesos.`);
-   throw new Error(`${message||'No respondió el servicio de cuentas.'} Respaldo local: ${fallbackError?.message||'no disponible'}`);
-  }
- }
-}
 export default function Accesos(){
  const [rows,setRows]=useState([]),[f,setF]=useState(blank),[msg,setMsg]=useState(''),[editing,setEditing]=useState(null),[selected,setSelected]=useState(new Set()),[busy,setBusy]=useState(false),[createdCredentials,setCreatedCredentials]=useState([]);
  async function load(){const s=await getDocs(collection(db,'usuariosNodo'));const data=s.docs.map(d=>({id:d.id,...d.data()}));setRows(data);return data;}
@@ -50,7 +34,7 @@ export default function Accesos(){
    for(const item of missing){
     const password=tempPassword();
     try{
-     const out=await createSignerWithFallback({username:item.usuario,nombre:item.nombre,cargo:item.cargo,temporaryPassword:password,activo:true});
+     const out=await manageSignerAccount({username:item.usuario,nombre:item.nombre,cargo:item.cargo,temporaryPassword:password,activo:true});
      creds.push({...item,temporaryPassword:out.created?password:'',created:!!out.created});
     }catch(e){errors.push(`${item.usuario}: ${e?.message||'error'}`);}
    }
@@ -62,8 +46,6 @@ export default function Accesos(){
  }
  useEffect(()=>{ensureInitialSigners().catch(e=>{console.error(e);setMsg(e?.message||'No fue posible crear automáticamente las cuentas firmantes iniciales.');setBusy(false);});},[]);
  const selectedRows=useMemo(()=>rows.filter(x=>selected.has(x.id)),[rows,selected]);
-
- const signerStatus=useMemo(()=>initialSigners.map(item=>{const found=rows.find(x=>x.rol==='Firmante'&&normalizeUser(x.usuario)===normalizeUser(item.usuario));return {...item,registered:!!found,uid:found?.uid||''}}),[rows]);
 
  function tempPassword(){
   const alphabet='ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$';
@@ -79,7 +61,7 @@ export default function Accesos(){
    for(const item of initialSigners){
     const password=tempPassword();
     try{
-     const out=await createSignerWithFallback({username:item.usuario,nombre:item.nombre,cargo:item.cargo,temporaryPassword:password,activo:true});
+     const out=await manageSignerAccount({username:item.usuario,nombre:item.nombre,cargo:item.cargo,temporaryPassword:password,activo:true});
      creds.push({...item,temporaryPassword:out.created?password:'',created:!!out.created});
     }catch(e){errors.push(`${item.usuario}: ${e?.message||'error'}`);}
    }
@@ -104,7 +86,7 @@ export default function Accesos(){
    const oldId=editing;
    if(signer){
     const previous=rows.find(x=>x.id===oldId);
-    const out=await createSignerWithFallback({username:usuario,previousUsername:previous?.usuario||'',nombre:f.nombre,cargo:f.cargo||'',temporaryPassword:f.temporaryPassword,activo:f.activo!==false});
+    const out=await manageSignerAccount({username:usuario,previousUsername:previous?.usuario||'',nombre:f.nombre,cargo:f.cargo||'',temporaryPassword:f.temporaryPassword,activo:f.activo!==false});
     if(oldId&&oldId!==out.profileId)await deleteDoc(doc(db,'usuariosNodo',oldId)).catch(()=>{});
     setMsg(out.created?`Cuenta firmante creada. Usuario: ${usuario}. Entrega la contraseña temporal por un canal seguro.`:`Cuenta firmante actualizada. Usuario: ${usuario}.`);
    }else{
@@ -120,8 +102,7 @@ export default function Accesos(){
  async function removeSelected(){if(!selectedRows.length||!confirm(`¿Borrar ${selectedRows.length} acceso(s)?`))return;for(const x of selectedRows)await deleteDoc(doc(db,'usuariosNodo',x.id));setSelected(new Set());load();}
  const signer=f.rol==='Firmante';
  return <div><div style={{background:'#fff',border:`1px solid ${border}`,borderRadius:12,padding:16}}><h2 style={{color:green,marginTop:0}}>{editing?'Editar acceso':'Accesos y cuentas firmantes'}</h2><p style={{fontSize:13}}>Los firmantes usan únicamente un <b>nombre de usuario</b>, contraseña de acceso y PIN de firma. No es necesario registrar correo.</p><div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(220px,1fr))',gap:10}}><input style={input} placeholder="Nombre" value={f.nombre} onChange={e=>setF({...f,nombre:e.target.value})}/>{signer&&<input style={input} placeholder="Cargo / carácter" value={f.cargo||''} onChange={e=>setF({...f,cargo:e.target.value})}/>}{signer?<input style={input} placeholder="Usuario, ej. prejvalenzuela26" value={f.usuario||''} onChange={e=>setF({...f,usuario:normalizeUser(e.target.value)})}/>:<input style={input} placeholder="correo@ejemplo.com" value={f.email||''} onChange={e=>setF({...f,email:e.target.value})}/>}<select style={input} value={f.rol} onChange={e=>setF({...f,rol:e.target.value,alcance:e.target.value==='Firmante'?'Firmas':f.alcance})}><option>Editor</option><option>Captura</option><option>Consulta</option><option>Administrador</option><option>Firmante</option></select>{!signer&&<select style={input} value={f.alcance} onChange={e=>setF({...f,alcance:e.target.value})}>{programas.filter(x=>x!=='Firmas').map(x=><option key={x}>{x}</option>)}</select>}{signer&&!editing&&<input style={input} type="password" placeholder="Contraseña temporal (mín. 8 caracteres)" value={f.temporaryPassword} onChange={e=>setF({...f,temporaryPassword:e.target.value})}/>}</div>{signer&&<div style={{fontSize:11,color:'#667268',marginTop:7}}>Ejemplos: <b>prejvalenzuela26</b>, <b>teshfigueroa26</b>, <b>secolegaria26</b>, <b>vocal101</b>. El usuario entra al Portal de Firmas con este nombre y su contraseña; después configura un PIN de 6 dígitos.</div>}<label style={{display:'block',marginTop:8,fontSize:13}}><input type="checkbox" checked={f.activo!==false} onChange={e=>setF({...f,activo:e.target.checked})}/> Activo</label><div style={{display:'flex',gap:8,marginTop:10}}><button style={btn('primary')} disabled={busy} onClick={save}>{busy?'Guardando…':editing?'Actualizar acceso':'Guardar acceso'}</button>{editing&&<button style={btn()} onClick={()=>{setEditing(null);setF(blank)}}>Cancelar</button>}</div>{msg&&<div style={{fontSize:12,marginTop:8,padding:8,background:'#f3f7f1',borderRadius:7}}>{msg}</div>}</div>
- <div style={{display:'flex',gap:8,margin:'12px 0',flexWrap:'wrap'}}><span style={{fontSize:12,fontWeight:800,color:green}}>Las 8 cuentas iniciales se crean automáticamente al abrir este módulo.</span>{createdCredentials.some(x=>x.created)&&<button style={btn()} onClick={printInitialCredentials}>Imprimir contraseñas temporales</button>}<button style={btn()} onClick={()=>setSelected(selected.size===rows.length?new Set():selectAll(rows.map(x=>x.id)))}>{selected.size===rows.length&&rows.length?'Quitar selección':'Seleccionar todos'}</button><button style={btn()} disabled={!selectedRows.length} onClick={()=>printRecords('Accesos NODO',selectedRows,cols)}>Imprimir seleccionados ({selectedRows.length})</button><button style={btn('danger')} disabled={!selectedRows.length} onClick={removeSelected}>Borrar seleccionados</button><button style={btn('primary')} onClick={()=>window.open('/?firmas=1','_blank')}>Abrir Portal de Firmas</button></div>
- <div style={{background:'#fff',border:`1px solid ${border}`,borderRadius:10,padding:12,marginBottom:12}}><b>Firmantes iniciales</b><div style={{fontSize:11,marginTop:4,color:'#667268'}}>Estas son las ocho cuentas requeridas. El estado cambia a REGISTRADA cuando existe realmente en Firebase y en usuariosNodo.</div><div style={{display:'grid',gap:5,marginTop:8}}>{signerStatus.map(x=><div key={x.usuario} style={{display:'flex',justifyContent:'space-between',gap:10,flexWrap:'wrap',fontSize:12,padding:'6px 8px',background:'#f7f9f5',borderRadius:7}}><span><b>{x.usuario}</b> · {x.nombre} · {x.cargo}</span><b style={{color:x.registered?'#2e7d32':'#b26a00'}}>{x.registered?'REGISTRADA':'PENDIENTE DE ALTA'}</b></div>)}</div><button style={{...btn('primary'),marginTop:9}} disabled={busy} onClick={createInitialSigners}>Reintentar alta de las 8 cuentas</button></div>
+ <div style={{display:'flex',gap:8,margin:'12px 0',flexWrap:'wrap'}}><span style={{fontSize:12,fontWeight:800,color:green}}>Las 8 cuentas iniciales se crean automáticamente al abrir este módulo.</span><button style={btn()} disabled={busy} onClick={ensureInitialSigners}>{busy?'Verificando…':'Reintentar registro de firmantes iniciales'}</button>{createdCredentials.some(x=>x.created)&&<button style={btn()} onClick={printInitialCredentials}>Imprimir contraseñas temporales</button>}<button style={btn()} onClick={()=>setSelected(selected.size===rows.length?new Set():selectAll(rows.map(x=>x.id)))}>{selected.size===rows.length&&rows.length?'Quitar selección':'Seleccionar todos'}</button><button style={btn()} disabled={!selectedRows.length} onClick={()=>printRecords('Accesos NODO',selectedRows,cols)}>Imprimir seleccionados ({selectedRows.length})</button><button style={btn('danger')} disabled={!selectedRows.length} onClick={removeSelected}>Borrar seleccionados</button><button style={btn('primary')} onClick={()=>window.open('/?firmas=1','_blank')}>Abrir Portal de Firmas</button></div>
  {createdCredentials.length>0&&<div style={{background:'#fff8dc',border:'1px solid #e6d58c',borderRadius:10,padding:12,marginBottom:12}}><b>Resultado de creación inicial</b><div style={{fontSize:11,marginTop:5}}>Las contraseñas sólo se muestran para cuentas nuevas. Guárdalas o imprímelas ahora.</div>{createdCredentials.map(x=><div key={x.usuario} style={{fontSize:12,marginTop:5}}><b>{x.usuario}</b> · {x.nombre} · {x.cargo} · {x.created?`Contraseña temporal: ${x.temporaryPassword}`:'Cuenta ya existente; no se cambió su contraseña.'}</div>)}</div>}
  <div style={{display:'grid',gap:8}}>{rows.map(x=><div key={x.id} style={{background:'#fff',border:`1px solid ${border}`,borderRadius:10,padding:12,display:'grid',gridTemplateColumns:'28px 1fr auto',gap:10}}><input type="checkbox" checked={selected.has(x.id)} onChange={()=>setSelected(s=>toggleSelection(s,x.id))}/><div><b>{x.nombre||x.usuario||x.email}</b><div style={{fontSize:12}}>{x.rol==='Firmante'?`Usuario: ${x.usuario||'—'}${x.cargo?` · ${x.cargo}`:''}`:`${x.email||'—'}`} · {x.alcance} · {x.rol}{x.activo===false?' · INACTIVO':''}</div></div><div style={{display:'flex',gap:6,flexWrap:'wrap'}}><button style={btn()} onClick={()=>edit(x)}>Editar</button><button style={btn()} onClick={()=>printRecords(`Acceso · ${x.usuario||x.email}`,[x],cols)}>Imprimir</button><button style={btn('danger')} onClick={()=>remove(x)}>Borrar</button></div></div>)}</div></div>
 }

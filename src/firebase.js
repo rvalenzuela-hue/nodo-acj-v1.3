@@ -2,7 +2,7 @@ import { initializeApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
 
-export const firebaseConfig = {
+const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyCrz3epxfj33orn3k2oEd5vdudZrI6K5_8",
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "sigeac-1fc0c.firebaseapp.com",
   projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "sigeac-1fc0c",
