@@ -79,7 +79,15 @@ export default function ActasHibridas({focus,onChanged}){
   }
   async function del(x){if(!confirm(`¿Eliminar “${x.titulo}”?`))return;for(const p of x.participantes||[]){if(p.firmaToken)await deleteDoc(doc(db,'actaFirmas',p.firmaToken)).catch(()=>{});}await deleteDoc(doc(db,'minutasMesa',x.id));if(editing===x.id)reset();await load();onChanged?.();}
   function linkFor(){return `${window.location.origin}/?firmas=1`;}
-  async function copyLink(p){await navigator.clipboard?.writeText(linkFor(p));setMsg(`Enlace del Portal de Firmas copiado para ${p.nombre}.`);}
+  async function copyLink(p){
+   const text=linkFor(p);let copied=false;
+   try{if(navigator.clipboard&&window.isSecureContext){await navigator.clipboard.writeText(text);copied=true}}catch{}
+   if(!copied){
+    try{const ta=document.createElement('textarea');ta.value=text;ta.setAttribute('readonly','');ta.style.position='fixed';ta.style.opacity='0';document.body.appendChild(ta);ta.select();copied=document.execCommand('copy');document.body.removeChild(ta)}catch{}
+   }
+   if(copied)setMsg(`Enlace del Portal de Firmas copiado para ${p.nombre}.`);
+   else{setMsg(`No fue posible copiar automáticamente. Enlace: ${text}`);try{window.prompt('Copia el enlace del Portal de Firmas:',text)}catch{}}
+  }
   function sendWhatsApp(p){
     const text=`${p.nombre||'Hola'}, tienes un documento pendiente de firma en NODO: ${form.tipoDocumento||'Acta'}${form.titulo?` “${form.titulo}”`:''}. Usuario: ${p.usuarioFirmante||'tu usuario NODO'}. Ingresa, revisa la versión definitiva y firma con tu PIN: ${linkFor(p)}`;
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`,'_blank','noopener,noreferrer');
