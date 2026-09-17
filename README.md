@@ -1,3 +1,7 @@
+NODO Asociación v0.8.56
+
+Corrección: Agenda con Editar, Imprimir y Eliminar visibles, edición real del registro y manejo de errores.
+
 # NODO — Asociación de Comercio Justo Campos Bórquez A.C.
 
 Portal público y sistema de gestión de la Asociación de Comercio Justo Campos Bórquez A.C.
