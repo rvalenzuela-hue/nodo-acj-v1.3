@@ -13,7 +13,8 @@ service cloud.firestore {
       "ybautista@fundacionborquezschwarzbeck.org","preventivocaborca@fundacionborquezschwarzbeck.org",
       "contacto@fundacionborquezschwarzbeck.org","itomnawam@fundacionborquezschwarzbeck.org"
     ]; }
-    function known() { return signedIn() && (hasNodoProfile() ? get(/databases/$(database)/documents/usuariosNodo/$(email())).data.activo != false : (hasProfile() ? profile().activo != false : fallbackKnown())); }
+    function isSigner() { return signedIn() && hasNodoProfile() && get(/databases/$(database)/documents/usuariosNodo/$(email())).data.activo != false && get(/databases/$(database)/documents/usuariosNodo/$(email())).data.rol == "Firmante"; }
+    function known() { return signedIn() && (hasNodoProfile() ? (get(/databases/$(database)/documents/usuariosNodo/$(email())).data.activo != false && get(/databases/$(database)/documents/usuariosNodo/$(email())).data.rol != "Firmante") : (hasProfile() ? profile().activo != false : fallbackKnown())); }
     function isAdmin() { return known() && ((hasNodoProfile() && get(/databases/$(database)/documents/usuariosNodo/$(email())).data.rol == "Administrador") || (hasProfile() && profile().rol == "admin") || (!hasProfile() && email() == "rvalenzuela@fundacionborquezschwarzbeck.org")); }
     function isDirection() { return known() && ((hasProfile() && profile().rol == "direccion") || (!hasProfile() && email() == "charo@camposborquez.com")); }
     function isManagement() { return isAdmin() || isDirection(); }
@@ -121,9 +122,9 @@ service cloud.firestore {
     match /minutasMesa/{id} { allow read: if known(); allow create, update: if known(); allow delete: if isManagement(); }
     match /actaFirmas/{token} {
       allow get: if true;
-      allow list: if known();
+      allow list: if known() || (isSigner() && resource.data.firmanteUid == request.auth.uid);
       allow create, delete: if known();
-      allow update: if known() || (resource.data.estado == 'Pendiente' && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['estado','conformidadEn','metodo','declaracionAceptada']) && request.resource.data.estado == 'Conforme' && request.resource.data.declaracionAceptada == true);
+      allow update: if known() || (resource.data.metodo == 'Conformidad electrónica' && resource.data.estado == 'Pendiente' && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['estado','conformidadEn','metodo','declaracionAceptada']) && request.resource.data.estado == 'Conforme' && request.resource.data.declaracionAceptada == true);
     }
     match /rezagadosBecas/{id} { allow read, create, update, delete: if known(); }
     match /solicitudesBecas/{id} {
@@ -132,7 +133,7 @@ service cloud.firestore {
       allow delete: if isManagement();
     }
     match /becaAccesos/{codigo} { allow create, read, update: if true; allow delete: if isManagement(); }
-    match /usuariosNodo/{id} { allow read: if signedIn(); allow write: if isManagement(); }
+    match /usuariosNodo/{id} { allow read: if known() || isManagement() || (signedIn() && id == email()); allow write: if isManagement(); }
     match /expedientesParticipante/{pid}/becas/{id} { allow read, write: if known(); }
     match /consultorioDental/{id} { allow read, write: if known() && (isManagement() || (hasNodoProfile() && get(/databases/$(database)/documents/usuariosNodo/$(email())).data.alcance in ['Toda la mesa','Consultorio Dental'])); }
     match /{document=**} { allow read, write: if false; }

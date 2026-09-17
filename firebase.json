@@ -25,6 +25,27 @@
         }
       },
       {
+        "source": "/api/manage-signer",
+        "function": {
+          "functionId": "manageSigner",
+          "region": "us-central1"
+        }
+      },
+      {
+        "source": "/api/signing-pin",
+        "function": {
+          "functionId": "signingPin",
+          "region": "us-central1"
+        }
+      },
+      {
+        "source": "/api/sign-acta",
+        "function": {
+          "functionId": "signActa",
+          "region": "us-central1"
+        }
+      },
+      {
         "source": "**",
         "destination": "/index.html"
       }
